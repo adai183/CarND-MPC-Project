@@ -102,6 +102,7 @@ int main() {
           py = py + v*sin(psi)*latency;
           psi = psi + v*steer_value/Lf*latency;
           v = v + throttle_value*latency;
+          
 
 
           for (int i = 0; i < ptsx.size(); ++i)

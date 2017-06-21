@@ -1,7 +1,81 @@
 # CarND-Controls-MPC
 Self-Driving Car Engineer Nanodegree Program
-
+ 
 ---
+ 
+## Environment and Objective 
+The goal of the project is to design a model predictive controller (MPC) that drives a car autonomously in a simulated environment (Udacity self-driving car simulator). The simulator provides us with waypoints along a optimal reference trajectory. The process objective is to follow this reference track as closely as possible. We also get a feed of measurements from the environment, which is used to define the model.
+ 
+## Model
+A kinematic bicycle model is used, which means that all dynamical effects such as inertia, friction and torque are not taken in account. 
+ 
+The model is defined by six dependent variables also called constraints: x/y position (x, y), heading(psi), velocity (v), cross track error(cte) and the error of the heading angle (epsi). These constraints are used to design a cost function, which our controller is trying to optimise. 
+The MPC is predicting two independent variables also called actuators: steering angle(delta) and throttle(a). These actuators are the controller's output, which is used to drive the car. 
+ 
+After all we are dealing with an optimisation problem. The MPC' job is to find the right value for the actuators, that best minimizes the cost function. 
+ 
+Here are the equations used to predict the dependent variables at each timestep t+1 :
+ 
+```
+      // x_[t+1] = x[t] + v[t] * cos(psi[t]) * dt
+      // y_[t+1] = y[t] + v[t] * sin(psi[t]) * dt
+      // psi_[t+1] = psi[t] + v[t] / Lf * delta[t] * dt
+      // v_[t+1] = v[t] + a[t] * dt
+      // cte[t+1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt
+      // epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt
+```
+ 
+`Lf` is a design parameter, which is taken needed to properly model the vehicle's maneuverability. It basically considers the effect of the distance between the center of mass of the vehicle and the front wheels in terms of maneuverability.
+ 
+ 
+## Timestep Length and Elapsed Duration (N & dt)
+ 
+The cost function is minimized at each time step for N timesteps into the future. We also have to choose the elapsed duration dt per timestep. We only use the actuator values predicted for the first timestep to maneuver the vehicle. At each time step the entire optimisation problem is solved again. This is the case because our predicted trajectory is only an approximation, that has to be constantly reevaluated to match reality. 
+N defines the prediction horizon and has to be properly tuned to make our vehicle drive save around the track. A large prediction horizon makes our car drive more smooth, but leads to a tradeoff of making our controler less responsive and also being more computationally expensive.
+A large dt results in a better accuracy but is also more computationally expensive and increases latency.
+ 
+Values of `N` and `dt` were chosen empirically to make sure to get the car save around the track. 
+The values are `N=10` and `dt=0.2`. Values 100% above and below were tried but gave worse results following the behaviour described above.
+ 
+ 
+## MPC Preprocessing
+For the sake of simplification waypoints are preprocessed. 
+ 
+* First we shift the car reference angle to 90 degrees by subtracting our current position from all the way points. This way our waypoints start at x/y coordinate 0. Here are the equations for the transformation:
+ 
+```
+  double shift_x = ptsx[i] - px;
+  double shift_y = ptsy[i] - py;
+```
+is makes it easier to do the polynomial fit because the numerical optimisation works better when the points are close to the origin.
+ 
+* Second we also rotate all the waypoints in a way that our cars heading angle psi is set to 0.
+Here the equations for the transformation:
+ 
+```
+  ptsx[i] = (shift_x *cos(0-psi)-shift_y *sin(0-psi));
+  ptsy[i] = (shift_x *sin(0-psi)+shift_y *cos(0-psi));
+```
+The rotation also facilitates our polyfit because now we are looking at something similar to a horizontal line. This makes sure the function is defined. Without the rotation we would look at a more vertical and get into trouble because we could have multiple y values for the same x value.
+ 
+ 
+After these two transformations our reference system has 0 degrees and is also sitting at the origin. 
+ 
+## Latency
+As a requirement the model has to be capable of dealing with 100ms latency. Therefore we have to predict our state 100ms into the future before transforming the state and feeding it into the solver. Here is our prediction model:
+ 
+```
+  // predict state in 100ms to deal with latency
+  double latency = 0.1; 
+  px = px + v*cos(psi)*latency;
+  py = py + v*sin(psi)*latency;
+  psi = psi + v*steer_value/Lf*latency;
+  v = v + throttle_value*latency;
+```
+ 
+ 
+
+
 
 ## Dependencies
 
